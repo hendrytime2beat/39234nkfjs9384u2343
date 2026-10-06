@@ -96,6 +96,6 @@ Penjelasan: Route dan permission sudah ada di sistem (employee-R/C/U/D), tapi me
 
 Url : https://whitelist.dazo.dev/admin/employee
 
-SS : (tidak disertakan)
+SS : ![BUG46 employee 500.png](img/BUG46%20employee%20500.png)
 
 File : routes/_admin.php
