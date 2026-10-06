@@ -22,6 +22,10 @@ Url : https://whitelist.dazo.dev/admin/user/create
 
 SS : ![Pasted image 20261006151344.png](img/Pasted%20image%2020261006151344.png)
 
+File : app/Http/Controllers/Admin/AuthController.php:141
+
+Status : SUDAH DIPERBAIKI di lokal — belum dideploy ke server dev. Di server dev masih BELUM diperbaiki.
+
 ---
 
 BUG #6 — Halaman permission mati total
@@ -42,6 +46,8 @@ Sudah diuji di server dev dengan permission uji "auditddtest" dan bugnya TERBUKT
 
 Cara bersihkan: hapus permission "auditddtest" dari tabel permissions (guard admin), lalu php artisan permission:cache-clear
 
+Status : SUDAH DIPERBAIKI di lokal — belum dideploy. Perbaikan hanya berlaku kalau permission yang namanya tidak berformat "prefix-action" sudah dihapus. Permission uji "auditddtest" masih ada di server dev, jadi halaman di sana masih mati total.
+
 ---
 
 BUG #7 — Guard "web" tidak ditemukan, halaman API error
@@ -59,6 +65,8 @@ SS : ![BUG7 api user 500.png](img/BUG7%20api%20user%20500.png)
 File : config/sanctum.php:36, config/passport.php:16
 
 Sudah diuji di server dev. Hasil: HTTP 500 dengan pesan "Auth guard [web] is not defined. (500 Internal Server Error)"
+
+Status : SUDAH DIPERBAIKI di lokal — belum dideploy. Di server dev masih BELUM diperbaiki, semua alamat /api/* masih 500.
 
 ---
 
@@ -90,14 +98,82 @@ File : app/Http/Controllers/Admin/MemberController.php:236-242
 
 Status : SUDAH DIPERBAIKI — 4 metode diubah: suspend, unsuspend, send_warning, show
 
+Reproduksi di server dev (bukan hanya analisis kode):
+
+Panggil endpoint suspend dengan id bernilai "0" — string "0" dianggap kosong oleh PHP.
+
+POST /admin/member/suspend/0   ->   HTTP 200
+Response: {"status":true,"message":"Data Tidak Valid","data":1}
+
+Tidak ada error. Halaman tetap menampilkan "success".
+
+Target yang dibekukan adalah member yang TIDAK PERNAH dipilih admin:
+
+Sebelum : Dionisius Nofamati Mendrofa  (mendrofadion@gmail.com)  status = Blacklist
+Sesudah : Dionisius Nofamati Mendrofa  (mendrofadion@gmail.com)  status = Suspend
+
+Pemeriksaan isi database sesudah request:
+
+f10a431c-4fd4-40ba-8acf-5230cd3aeaad  status='Suspend'  mendrofadion@gmail.com
+
+Uji di database, semua nilai kosong menghasilkan member yang sama:
+
+id=NULL  -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
+id=''    -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
+id='0'   -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
+id=0     -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
+
+Sebagai pembanding — ID yang benar dan tidak dikenal tetap ditolak dengan aman:
+
+id = employee (bukan owner) -> DITOLAK (ModelNotFoundException)
+id = UUID tidak dikenal      -> DITOLAK (ModelNotFoundException)
+
+Penyebab: Member::owner($id)->firstOrFail() hanya menambahkan filter ID bila $id bernilai. Kalau $id kosong, filter dilewati dan firstOrFail() mengambil baris pertama.
+
+Catatan: request ini tetap sampai ke route, karena route mendefinisikan {id} sebagai satu segmen URL dan "0" tetap lolos. POST tanpa id sama sekali akan kena 404 routing.
+
+Status server dev saat screenshot: SUDAH DIPERBAIKI. effected member sudah dikembalikan ke status Blacklist setelah bukti diambil.
+
 ---
 
 BUG #46 — Halaman Employee selalu 500
 
-Penjelasan: Route dan permission sudah ada di sistem (employee-R/C/U/D), tapi method-nya tidak pernah ditulis. Jadi begitu halaman dibuka, muncul error "Call to undefined method EmployeeController::index()". Tombolnya kelihatan siap dipakai padahal belum ada isinya.
+Penjelasan: Route dan permission sudah ada di sistem (employee-R/C/U/D), dan method index() di controller sebenarnya ada. Yang tidak ada adalah isi $data['index'] — tempat tabel beserta kolom-kolomnya didefinisikan. Karena itu halaman langsung crash begitu dibuka.
 
 Url : https://whitelist.dazo.dev/admin/employee
 
 SS : ![BUG46 employee 500.png](img/BUG46%20employee%20500.png)
 
-File : routes/_admin.php
+File : app/Http/Controllers/Admin/EmployeeController.php, app/Http/Livewire/Com/TableWire.php:75
+
+Status : SUDAH DIPERBAIKI sementara di lokal — route dinonaktifkan, 500 jadi 404. Di server dev masih BELUM diperbaiki. Fitur CRUD employee belum dibuat.
+
+Bukti di server dev:
+
+GET /admin/employee -> HTTP 500
+ViewException
+Undefined array key "content"
+(View: /home/dazo-dev-whitelist/dazo.whitelist/resources/views/layout/table.blade.php)
+
+Dediagnosis dari EmployeeController.php:
+
+class EmployeeController extends Controller {
+    protected static $data = [
+        'model' => 'Member',
+        'wire'  => 'admin.member-wire',
+    ];
+}
+
+Dibanding controller yang jalan (RoleController):
+
+EmployeeController : keys = model, wire
+RoleController     : keys = model, wire, index
+
+TabelWire.php:75 menjalankan $datasend['content'] = list_name($datasend['content'], true);
+
+Karena EmployeeController tidak punya key 'index', tidak ada data content, dan TableWire langsung crash.
+
+Koreksi terhadap dokumen lama: error aslinya bukan "Call to undefined method EmployeeController::index()", tapi "Undefined array key content" di TableWire.php:75. Letak bug tetap sama — EmployeeController.
+
+Catatan keamanan: route /admin/role/permission (baris 62 di routes/_admin.php) tidak memakai middleware permission sama sekali, padahal 5 route lain di group yang sama memakai. Route /admin/employee memakai middleware employee-R, jadi tidak bisa diakses tanpa permission itu.
+
