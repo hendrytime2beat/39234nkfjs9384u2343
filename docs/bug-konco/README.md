@@ -80,11 +80,13 @@ BUG #45 — Tombol suspend bisa membekukan member yang salah
 
 Penjelasan: Ketika ID member kosong, filter ID dilewati dan sistem membekukan owner PERTAMA di database — bukan member yang dituju. Tidak ada error, halaman tetap menampilkan "success". Bisa membekukan member yang lagi aktif dipakai.
 
-Url : https://whitelist.dazo.dev/admin/member
+Url : POST https://whitelist.dazo.dev/admin/member/suspend/0
 
-SS : (tidak disertakan)
+SS : ![BUG45 suspend wrong member.png](img/BUG45%20suspend%20wrong%20member.png)
 
-File : app/Http/Controllers/Admin/MemberController.php
+SS2 : ![BUG45 victim suspended.png](img/BUG45%20victim%20suspended.png)
+
+File : app/Http/Controllers/Admin/MemberController.php:236-242
 
 Status : SUDAH DIPERBAIKI — 4 metode diubah: suspend, unsuspend, send_warning, show
 
