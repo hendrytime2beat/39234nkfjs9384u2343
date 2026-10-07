@@ -70,72 +70,6 @@ Status : SUDAH DIPERBAIKI di lokal — belum dideploy. Di server dev masih BELUM
 
 ---
 
-BUG #34 — Member bisa transfer saldonya ke akun iklan milik member lain
-
-Penjelasan: Member bisa menulis ID akun iklan orang lain di browser, lalu sistem mentransfer saldonya ke sana. UI tidak menawarkan opsi ini, jadi tidak akan ketahuan kalau diuji lewat browser — yang diuji tampilan, bukan server-nya. Akun tujuan beserta BM key-nya ikut terkirim, sehingga sistem memproses transfer ke akun orang lain atas nama peminta.
-
-Url : https://whitelist.dazo.dev/member/transfer_balance
-
-SS : ![BUG34 idor destination.png](img/BUG34%20idor%20destination.png)
-
-File : app/Http/Livewire/Member/TransferBalanceMemberWire.php
-
-Status : SUDAH DIPERBAIKI — where_member() ditambahkan di 3 titik (confirmTransfer, saveDestination, buildSourceAccountsData)
-
----
-
-BUG #45 — Tombol suspend bisa membekukan member yang salah
-
-Penjelasan: Ketika ID member kosong, filter ID dilewati dan sistem membekukan owner PERTAMA di database — bukan member yang dituju. Tidak ada error, halaman tetap menampilkan "success". Bisa membekukan member yang lagi aktif dipakai.
-
-Url : POST https://whitelist.dazo.dev/admin/member/suspend/0
-
-SS : ![BUG45 suspend wrong member.png](img/BUG45%20suspend%20wrong%20member.png)
-
-SS2 : ![BUG45 victim suspended.png](img/BUG45%20victim%20suspended.png)
-
-File : app/Http/Controllers/Admin/MemberController.php:236-242
-
-Status : SUDAH DIPERBAIKI — 4 metode diubah: suspend, unsuspend, send_warning, show
-
-Reproduksi di server dev (bukan hanya analisis kode):
-
-Panggil endpoint suspend dengan id bernilai "0" — string "0" dianggap kosong oleh PHP.
-
-POST /admin/member/suspend/0   ->   HTTP 200
-Response: {"status":true,"message":"Data Tidak Valid","data":1}
-
-Tidak ada error. Halaman tetap menampilkan "success".
-
-Target yang dibekukan adalah member yang TIDAK PERNAH dipilih admin:
-
-Sebelum : Dionisius Nofamati Mendrofa  (mendrofadion@gmail.com)  status = Blacklist
-Sesudah : Dionisius Nofamati Mendrofa  (mendrofadion@gmail.com)  status = Suspend
-
-Pemeriksaan isi database sesudah request:
-
-f10a431c-4fd4-40ba-8acf-5230cd3aeaad  status='Suspend'  mendrofadion@gmail.com
-
-Uji di database, semua nilai kosong menghasilkan member yang sama:
-
-id=NULL  -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
-id=''    -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
-id='0'   -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
-id=0     -> f10a431c-4fd4-40ba-8acf-5230cd3aeaad (Blacklist)
-
-Sebagai pembanding — ID yang benar dan tidak dikenal tetap ditolak dengan aman:
-
-id = employee (bukan owner) -> DITOLAK (ModelNotFoundException)
-id = UUID tidak dikenal      -> DITOLAK (ModelNotFoundException)
-
-Penyebab: Member::owner($id)->firstOrFail() hanya menambahkan filter ID bila $id bernilai. Kalau $id kosong, filter dilewati dan firstOrFail() mengambil baris pertama.
-
-Catatan: request ini tetap sampai ke route, karena route mendefinisikan {id} sebagai satu segmen URL dan "0" tetap lolos. POST tanpa id sama sekali akan kena 404 routing.
-
-Status server dev saat screenshot: SUDAH DIPERBAIKI. effected member sudah dikembalikan ke status Blacklist setelah bukti diambil.
-
----
-
 BUG #46 — Halaman Employee selalu 500
 
 Penjelasan: Route dan permission sudah ada di sistem (employee-R/C/U/D), dan method index() di controller sebenarnya ada. Yang tidak ada adalah isi $data['index'] — tempat tabel beserta kolom-kolomnya didefinisikan. Karena itu halaman langsung crash begitu dibuka.
@@ -176,4 +110,3 @@ Karena EmployeeController tidak punya key 'index', tidak ada data content, dan T
 Koreksi terhadap dokumen lama: error aslinya bukan "Call to undefined method EmployeeController::index()", tapi "Undefined array key content" di TableWire.php:75. Letak bug tetap sama — EmployeeController.
 
 Catatan keamanan: route /admin/role/permission (baris 62 di routes/_admin.php) tidak memakai middleware permission sama sekali, padahal 5 route lain di group yang sama memakai. Route /admin/employee memakai middleware employee-R, jadi tidak bisa diakses tanpa permission itu.
-
